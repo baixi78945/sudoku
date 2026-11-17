@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>数独 · Sudoku</title>
+<style>
+:root{
+  --panel:#141c2e; --line:#27324c; --line-strong:#41527a;
+  --text:#e8eeff; --muted:#8496bb; --user:#63b3ff; --sel:#2b4a7d;
+  --bad:#ff6b7a; --ok:#3ddc97;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+  color:var(--text);font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  background:radial-gradient(1100px 700px at 50% -15%,#1c2745 0%,#0b1020 55%,#070a12 100%);
+  -webkit-font-smoothing:antialiased;
+}
+.app{width:min(940px,100%)}
+.head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+h1{font-size:20px;letter-spacing:.3em;margin:0;font-weight:600;color:#dbe6ff}
+.levels{display:flex;gap:4px;background:#121a2b;padding:5px;border-radius:12px;border:1px solid #1e2942}
+.lv{background:none;border:0;color:var(--muted);font:inherit;font-size:13px;padding:7px 15px;border-radius:9px;cursor:pointer;transition:.18s}
+.lv:hover{color:var(--text)}
+.lv.active{background:linear-gradient(180deg,#2f6bff,#2454d8);color:#fff;box-shadow:0 4px 14px rgba(47,107,255,.35)}
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 284px;gap:22px;align-items:start}
+@media(max-width:860px){.wrap{grid-template-columns:1fr}}
+.board-wrap{position:relative;width:100%;max-width:560px;margin:0 auto}
+.board{display:grid;grid-template-columns:repeat(9,1fr);background:#0f1727;border:2px solid var(--line-strong);border-radius:12px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+.cell{position:relative;aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:#111a2b;cursor:pointer;transition:background .12s ease;font-variant-numeric:tabular-nums;font-size:clamp(17px,4.2vw,28px);-webkit-user-select:none;user-select:none;touch-action:manipulation}
+.cell[data-c="2"],.cell[data-c="5"]{border-right:2px solid var(--line-strong)}
+.cell[data-r="2"],.cell[data-r="5"]{border-bottom:2px solid var(--line-strong)}
+.cell[data-c="8"]{border-right:0}
+.cell[data-r="8"]{border-bottom:0}
+.cell .v{line-height:1;color:var(--user);font-weight:500}
+.cell.given .v{color:#dfe8ff;font-weight:600}
+.cell.peer{background:#1b2a44}
+.cell.same{background:#2b4c7e}
+.cell.bad{background:#3a202c}
+.cell.sel{background:#3f6bb5;box-shadow:inset 0 0 0 2px #6f9dff}
+.cell.bad .v{color:var(--bad)}
+.cell.hint .v{color:var(--ok)}
+.nb{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:3px;pointer-events:none}
+.nb i{display:flex;align-items:center;justify-content:center;font-style:normal;font-size:clamp(7px,1.5vw,11px);color:#7b8cb0;line-height:1}
+.panel{background:var(--panel);border:1px solid #1e2942;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:13px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:#101828;border:1px solid #1c2740;border-radius:10px;padding:8px 4px;text-align:center}
+.stat span{display:block;font-size:11px;color:var(--muted);letter-spacing:.1em}
+.stat b{display:block;font-size:16px;margin-top:3px;font-variant-numeric:tabular-nums}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pad-btn{position:relative;aspect-ratio:1.35;border-radius:11px;border:1px solid #26324e;background:linear-gradient(180deg,#1b2740,#16203a);color:var(--text);font-size:20px;font-weight:600;cursor:pointer;transition:.15s}
+.pad-btn:hover{border-color:#3b5aa0;transform:translateY(-1px)}
+.pad-btn:active{transform:scale(.97)}
+.pad-btn s{position:absolute;right:6px;bottom:4px;font-size:10px;color:var(--muted);text-decoration:none;font-weight:400}
+.pad-btn.done{opacity:.32}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ghost{border:1px solid #26324e;background:#151f34;color:#c7d5f5;border-radius:10px;padding:9px 8px;font:inherit;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:.15s}
+.ghost:hover{border-color:#3b5aa0;color:#fff}
+.ghost.on{background:linear-gradient(180deg,#2f6bff,#2454d8);border-color:#3f78ff;color:#fff}
+kbd{font:inherit;font-size:10px;background:#0d1524;border:1px solid #26324e;border-radius:4px;padding:1px 4px;color:var(--muted)}
+.ghost.on kbd{background:rgba(255,255,255,.16);border-color:transparent;color:#fff}
+button.primary{border:0;border-radius:11px;padding:12px;font:inherit;font-weight:600;color:#fff;background:linear-gradient(180deg,#2f6bff,#2454d8);cursor:pointer;box-shadow:0 8px 20px rgba(47,107,255,.3)}
+button.primary:hover{filter:brightness(1.07)}
+.wide{width:100%}
+.tip{margin:0;font-size:11px;color:#65779c;text-align:center;line-height:1.7}
+@media(max-width:520px){
+  body{padding:12px}
+  .head{margin-bottom:12px}
+  h1{font-size:17px}
+  .lv{padding:6px 11px;font-size:12px}
+  .panel{padding:12px;gap:10px}
+  .pad-btn{aspect-ratio:1.9;font-size:17px;border-radius:10px}
+  .ghost{padding:8px 6px;font-size:12px}
+  .stat b{font-size:15px}
+  .tip{display:none}
+}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(8,12,22,.72);backdrop-filter:blur(6px);border-radius:12px;opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay.show{opacity:1;pointer-events:auto}
+.card{background:#16213a;border:1px solid #2b3a5c;border-radius:16px;padding:22px 26px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.card .big{font-size:20px;font-weight:600;margin-bottom:8px}
+.card p{margin:0 0 16px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="head">
+    <h1>数独</h1>
+    <div class="levels" id="levels">
+      <button class="lv active" data-level="easy">简单</button>
+      <button class="lv" data-level="medium">中等</button>
+      <button class="lv" data-level="hard">困难</button>
+      <button class="lv" data-level="expert">专家</button>
+    </div>
+  </header>
+  <div class="wrap">
+    <div class="board-wrap">
+      <div class="board" id="board"></div>
+      <div class="overlay" id="overlay">
+        <div class="card">
+          <div class="big">完成！</div>
+          <p id="result"></p>
+          <button class="primary" id="again">再来一局</button>
+        </div>
+      </div>
+    </div>
+    <aside class="panel">
+      <div class="stats">
+        <div class="stat"><span>用时</span><b id="time">00:00</b></div>
+        <div class="stat"><span>错误</span><b id="mistakes">0</b></div>
+        <div class="stat"><span>提示</span><b id="hints">0</b></div>
+      </div>
+      <div class="pad" id="pad"></div>
+      <div class="actions">
+        <button class="ghost" id="btn-note">笔记 <kbd>N</kbd></button>
+        <button class="ghost" id="btn-erase">擦除 <kbd>Del</kbd></button>
+        <button class="ghost" id="btn-undo">撤销 <kbd>U</kbd></button>
+        <button class="ghost" id="btn-hint">提示 <kbd>H</kbd></button>
+      </div>
+      <button class="primary wide" id="btn-new">新游戏</button>
+      <p class="tip">方向键移动 · 数字键填空 · 重复填同一数字可取消</p>
+    </aside>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  // ==== CORE START ====
+  var CELLS = 81;
+  var ALLBITS = 0x1ff;
+
+  var LEVELS = {
+    easy:   { label: "简单", clues: 45 },
+    medium: { label: "中等", clues: 34 },
+    hard:   { label: "困难", clues: 29 },
+    expert: { label: "专家", clues: 24 }
+  };
+
+  function shuffle(a) {
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function popcount(x) {
+    var c = 0;
+    while (x) { x &= x - 1; c++; }
+    return c;
+  }
+
+  function masks() {
+    return { r: new Int16Array(9), c: new Int16Array(9), b: new Int16Array(9) };
+  }
+
+  function rowOf(i) { return (i / 9) | 0; }
+  function colOf(i) { return i % 9; }
+  function boxOf(i) { return ((rowOf(i) / 3) | 0) * 3 + ((colOf(i) / 3) | 0); }
+
+  function search(g, m, randomize, limit, sol) {
+    var best = -1, bestMask = 0, bestCount = 10;
+    for (var i = 0; i < CELLS; i++) {
+      if (g[i] !== 0) continue;
+      var mask = ~(m.r[rowOf(i)] | m.c[colOf(i)] | m.b[boxOf(i)]) & ALLBITS;
+      var cnt = popcount(mask);
+      if (cnt === 0) return 0;
+      if (cnt < bestCount) {
+        bestCount = cnt; best = i; bestMask = mask;
+        if (cnt === 1) break;
+      }
+    }
+    if (best === -1) {
+      if (sol) for (var k = 0; k < CELLS; k++) sol[k] = g[k];
+      return 1;
+    }
+    var r = rowOf(best), c = colOf(best), b = boxOf(best);
+    var digits = [];
+    for (var d = 1; d <= 9; d++) if (bestMask & (1 << (d - 1))) digits.push(d);
+    if (randomize) shuffle(digits);
+    var total = 0;
+    for (var n = 0; n < digits.length; n++) {
+      d = digits[n];
+      var bit = 1 << (d - 1);
+      g[best] = d; m.r[r] |= bit; m.c[c] |= bit; m.b[b] |= bit;
+      total += search(g, m, randomize, limit - total, sol);
+      g[best] = 0; m.r[r] &= ~bit; m.c[c] &= ~bit; m.b[b] &= ~bit;
+      if (total >= limit) break;
+    }
+    return total;
+  }
+
+  function countSolutions(grid, limit) {
+    var g = new Int8Array(grid);
+    var m = masks();
+    for (var i = 0; i < CELLS; i++) {
+      var v = g[i];
+      if (!v) continue;
+      var bit = 1 << (v - 1);
+      var r = rowOf(i), c = colOf(i), b = boxOf(i);
+      if ((m.r[r] | m.c[c] | m.b[b]) & bit) return 0;
+      m.r[r] |= bit; m.c[c] |= bit; m.b[b] |= bit;
+    }
+    return search(g, m, false, limit, null);
+  }
+
+  function generate(levelKey) {
+    var def = LEVELS[levelKey] || LEVELS.easy;
+    var target = def.clues;
+    var sol = new Int8Array(CELLS);
+    search(new Int8Array(CELLS), masks(), true, 1, sol);
+    var puzzle = new Int8Array(sol);
+
+    var order = [];
+    for (var i = 0; i < CELLS; i++) order.push(i);
+    shuffle(order);
+
+    var clues = CELLS;
+    for (var a = 0; a < order.length && clues > target; a++) {
+      var p = order[a];
+      var q = CELLS - 1 - p;
+      var pair = p === q ? [p] : [p, q];
+      var dropped = [];
+      for (var t = 0; t < pair.length; t++) {
+        if (puzzle[pair[t]] !== 0) { dropped.push(pair[t]); puzzle[pair[t]] = 0; }
+      }
+      if (!dropped.length) continue;
+      if (countSolutions(puzzle, 2) === 1) {
+        clues -= dropped.length;
+      } else {
+        for (var u = 0; u < dropped.length; u++) puzzle[dropped[u]] = sol[dropped[u]];
+      }
+    }
+    for (var a2 = 0; a2 < order.length && clues > target; a2++) {
+      var pos = order[a2];
+      if (puzzle[pos] === 0) continue;
+      var keep = puzzle[pos];
+      puzzle[pos] = 0;
+      if (countSolutions(puzzle, 2) === 1) clues--;
+      else puzzle[pos] = keep;
+    }
+    return { puzzle: puzzle, solution: sol, clues: clues };
+  }
+  // ==== CORE END ====
+
+  var UNITS = (function () {
+    var list = [], r, c, br, bc, i;
+    for (r = 0; r < 9; r++) { var row = []; for (c = 0; c < 9; c++) row.push(r * 9 + c); list.push(row); }
+    for (c = 0; c < 9; c++) { var col = []; for (r = 0; r < 9; r++) col.push(r * 9 + c); list.push(col); }
+    for (br = 0; br < 3; br++) for (bc = 0; bc < 3; bc++) {
+      var box = [];
+      for (r = 0; r < 3; r++) for (c = 0; c < 3; c++) box.push((br * 3 + r) * 9 + bc * 3 + c);
+      list.push(box);
+    }
+    return list;
+  })();
+
+  var boardEl = document.getElementById("board");
+  var padEl = document.getElementById("pad");
+  var levelsEl = document.getElementById("levels");
+  var overlayEl = document.getElementById("overlay");
+  var resultEl = document.getElementById("result");
+  var timeEl = document.getElementById("time");
+  var mistakesEl = document.getElementById("mistakes");
+  var hintsEl = document.getElementById("hints");
+  var noteBtn = document.getElementById("btn-note");
+
+  var cellEls = [];
+  var valEls = [];
+  var noteEls = [];
+  var padBtns = [];
+
+  for (var ci = 0; ci < CELLS; ci++) {
+    var cell = document.createElement("div");
+    cell.className = "cell";
+    cell.dataset.i = String(ci);
+    cell.dataset.r = String(rowOf(ci));
+    cell.dataset.c = String(colOf(ci));
+    var vEl = document.createElement("span");
+    vEl.className = "v";
+    var nb = document.createElement("div");
+    nb.className = "nb";
+    var noteSpans = [];
+    for (var k = 0; k < 9; k++) {
+      var s = document.createElement("i");
+      nb.appendChild(s);
+      noteSpans.push(s);
+    }
+    cell.appendChild(vEl);
+    cell.appendChild(nb);
+    boardEl.appendChild(cell);
+    cellEls.push(cell);
+    valEls.push(vEl);
+    noteEls.push(noteSpans);
+  }
+
+  for (var dg = 1; dg <= 9; dg++) {
+    var btn = document.createElement("button");
+    btn.className = "pad-btn";
+    btn.dataset.d = String(dg);
+    btn.innerHTML = "<span>" + dg + "</span><s>9</s>";
+    padEl.appendChild(btn);
+    padBtns.push(btn);
+  }
+
+  var st = {
+    puzzle: null,
+    solution: null,
+    values: new Int8Array(CELLS),
+    notes: new Uint16Array(CELLS),
+    hint: new Uint8Array(CELLS),
+    sel: -1,
+    noteMode: false,
+    mistakes: 0,
+    hintsUsed: 0,
+    seconds: 0,
+    timer: null,
+    done: false,
+    history: [],
+    level: "easy"
+  };
+
+  function snapshot() {
+    st.history.push({
+      v: new Int8Array(st.values),
+      n: new Uint16Array(st.notes),
+      h: new Uint8Array(st.hint),
+      m: st.mistakes,
+      hu: st.hintsUsed
+    });
+    if (st.history.length > 300) st.history.shift();
+  }
+
+  function findConflicts(values) {
+    var bad = new Uint8Array(CELLS);
+    for (var u = 0; u < UNITS.length; u++) {
+      var unit = UNITS[u];
+      var seen = new Array(10);
+      for (var i = 0; i < 10; i++) seen[i] = -1;
+      for (var j = 0; j < unit.length; j++) {
+        var idx = unit[j];
+        var v = values[idx];
+        if (!v) continue;
+        if (seen[v] >= 0) { bad[idx] = 1; bad[seen[v]] = 1; }
+        else seen[v] = idx;
+      }
+    }
+    return bad;
+  }
+
+  function fmtTime(sec) {
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function render() {
+    var sel = st.sel;
+    var selVal = sel >= 0 ? st.values[sel] : 0;
+    var bad = findConflicts(st.values);
+    var sr = sel >= 0 ? rowOf(sel) : -1;
+    var sc = sel >= 0 ? colOf(sel) : -1;
+    var sb = sel >= 0 ? boxOf(sel) : -1;
+
+    for (var i = 0; i < CELLS; i++) {
+      var cls = "cell";
+      if (st.puzzle[i] !== 0) cls += " given";
+      if (i === sel) cls += " sel";
+      else if (sel >= 0 && (rowOf(i) === sr || colOf(i) === sc || boxOf(i) === sb)) cls += " peer";
+      if (selVal && st.values[i] === selVal && i !== sel) cls += " same";
+      if (bad[i]) cls += " bad";
+      if (st.hint[i]) cls += " hint";
+      cellEls[i].className = cls;
+
+      var v = st.values[i];
+      valEls[i].textContent = v ? String(v) : "";
+      var nm = st.notes[i];
+      for (var k = 0; k < 9; k++) {
+        noteEls[i][k].textContent = (!v && (nm & (1 << k))) ? String(k + 1) : "";
+      }
+    }
+
+    timeEl.textContent = fmtTime(st.seconds);
+    mistakesEl.textContent = String(st.mistakes);
+    hintsEl.textContent = String(st.hintsUsed);
+
+    var counts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for (var j = 0; j < CELLS; j++) if (st.values[j]) counts[st.values[j]]++;
+    for (var d = 1; d <= 9; d++) {
+      var left = 9 - counts[d];
+      padBtns[d - 1].querySelector("s").textContent = left > 0 ? String(left) : "";
+      padBtns[d - 1].className = left > 0 ? "pad-btn" : "pad-btn done";
+    }
+  }
+
+  function clearPeerNotes(idx, d) {
+    var bit = 1 << (d - 1);
+    var r = rowOf(idx), c = colOf(idx), b = boxOf(idx);
+    for (var k = 0; k < CELLS; k++) {
+      if (rowOf(k) === r || colOf(k) === c || boxOf(k) === b) st.notes[k] &= ~bit;
+    }
+  }
+
+  function place(d) {
+    var i = st.sel;
+    if (i < 0 || st.done || st.puzzle[i] !== 0) return;
+    if (st.noteMode) {
+      if (st.values[i]) return;
+      snapshot();
+      st.notes[i] ^= (1 << (d - 1));
+      render();
+      return;
+    }
+    snapshot();
+    if (st.values[i] === d) {
+      st.values[i] = 0;
+      render();
+      return;
+    }
+    st.values[i] = d;
+    st.notes[i] = 0;
+    st.hint[i] = 0;
+    if (d !== st.solution[i]) st.mistakes++;
+    else clearPeerNotes(i, d);
+    render();
+    checkWin();
+  }
+
+  function erase() {
+    var i = st.sel;
+    if (i < 0 || st.done || st.puzzle[i] !== 0) return;
+    if (!st.values[i] && !st.notes[i]) return;
+    snapshot();
+    st.values[i] = 0;
+    st.notes[i] = 0;
+    render();
+  }
+
+  function undo() {
+    if (st.done || !st.history.length) return;
+    var s = st.history.pop();
+    st.values = s.v;
+    st.notes = s.n;
+    st.hint = s.h;
+    st.mistakes = s.m;
+    st.hintsUsed = s.hu;
+    render();
+  }
+
+  function hint() {
+    if (st.done) return;
+    var target = -1;
+    if (st.sel >= 0 && st.puzzle[st.sel] === 0 && st.values[st.sel] !== st.solution[st.sel]) {
+      target = st.sel;
+    }
+    if (target < 0) {
+      var pool = [];
+      for (var i = 0; i < CELLS; i++) {
+        if (st.puzzle[i] === 0 && st.values[i] !== st.solution[i]) pool.push(i);
+      }
+      if (!pool.length) return;
+      target = pool[Math.floor(Math.random() * pool.length)];
+    }
+    snapshot();
+    st.values[target] = st.solution[target];
+    st.notes[target] = 0;
+    st.hint[target] = 1;
+    st.hintsUsed++;
+    clearPeerNotes(target, st.solution[target]);
+    st.sel = target;
+    render();
+    checkWin();
+  }
+
+  function checkWin() {
+    for (var i = 0; i < CELLS; i++) if (st.values[i] !== st.solution[i]) return;
+    st.done = true;
+    stopTimer();
+    resultEl.textContent = "用时 " + fmtTime(st.seconds) + " · 错误 " + st.mistakes + " 次 · 提示 " + st.hintsUsed + " 次";
+    overlayEl.classList.add("show");
+  }
+
+  function startTimer() {
+    stopTimer();
+    st.timer = setInterval(function () {
+      st.seconds++;
+      timeEl.textContent = fmtTime(st.seconds);
+    }, 1000);
+  }
+
+  function stopTimer() {
+    if (st.timer) { clearInterval(st.timer); st.timer = null; }
+  }
+
+  function newGame(levelKey) {
+    st.level = levelKey;
+    var data = generate(levelKey);
+    st.puzzle = data.puzzle;
+    st.solution = data.solution;
+    st.values = Int8Array.from(st.puzzle);
+    st.notes = new Uint16Array(CELLS);
+    st.hint = new Uint8Array(CELLS);
+    st.history = [];
+    st.sel = -1;
+    st.noteMode = false;
+    st.mistakes = 0;
+    st.hintsUsed = 0;
+    st.seconds = 0;
+    st.done = false;
+    overlayEl.classList.remove("show");
+    noteBtn.classList.remove("on");
+    var btns = levelsEl.querySelectorAll(".lv");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].className = btns[i].dataset.level === levelKey ? "lv active" : "lv";
+    }
+    startTimer();
+    render();
+  }
+
+  function moveSel(dr, dc) {
+    if (st.sel < 0) { st.sel = 0; render(); return; }
+    var r = (rowOf(st.sel) + dr + 9) % 9;
+    var c = (colOf(st.sel) + dc + 9) % 9;
+    st.sel = r * 9 + c;
+    render();
+  }
+
+  boardEl.addEventListener("pointerdown", function (e) {
+    var el = e.target.closest(".cell");
+    if (!el) return;
+    st.sel = parseInt(el.dataset.i, 10);
+    render();
+  });
+
+  padEl.addEventListener("click", function (e) {
+    var btn = e.target.closest(".pad-btn");
+    if (!btn) return;
+    place(parseInt(btn.dataset.d, 10));
+  });
+
+  levelsEl.addEventListener("click", function (e) {
+    var btn = e.target.closest(".lv");
+    if (!btn) return;
+    newGame(btn.dataset.level);
+  });
+
+  noteBtn.addEventListener("click", function () {
+    st.noteMode = !st.noteMode;
+    noteBtn.className = st.noteMode ? "ghost on" : "ghost";
+  });
+  document.getElementById("btn-erase").addEventListener("click", erase);
+  document.getElementById("btn-undo").addEventListener("click", undo);
+  document.getElementById("btn-hint").addEventListener("click", hint);
+  document.getElementById("btn-new").addEventListener("click", function () { newGame(st.level); });
+  document.getElementById("again").addEventListener("click", function () { newGame(st.level); });
+
+  document.addEventListener("keydown", function (e) {
+    var k = e.key;
+    if (k >= "1" && k <= "9") { place(parseInt(k, 10)); e.preventDefault(); return; }
+    if (k === "Backspace" || k === "Delete" || k === "0") { erase(); e.preventDefault(); return; }
+    if (k === "ArrowUp") { moveSel(-1, 0); e.preventDefault(); return; }
+    if (k === "ArrowDown") { moveSel(1, 0); e.preventDefault(); return; }
+    if (k === "ArrowLeft") { moveSel(0, -1); e.preventDefault(); return; }
+    if (k === "ArrowRight") { moveSel(0, 1); e.preventDefault(); return; }
+    if (k === "n" || k === "N") { noteBtn.click(); return; }
+    if (k === "h" || k === "H") { hint(); return; }
+    if (k === "u" || k === "U") { undo(); return; }
+    if ((e.ctrlKey || e.metaKey) && (k === "z" || k === "Z")) { undo(); e.preventDefault(); }
+  });
+
+  newGame("easy");
+})();
+</script>
+</body>
+</html>
